@@ -1,2 +1,2 @@
 # Nubs-Tic-Tac-Toe
-This is a Unity project file for my very first game, Tic Tac Toe.
+These are my assets for my first game made in Unity, Tic Tac Toe.
