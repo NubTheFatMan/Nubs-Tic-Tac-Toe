@@ -12,10 +12,17 @@ public class PositionGrid : MonoBehaviour {
     // This should be all the grid buttons for placing an X or O
     public GameObject[] boxes;
 
+    // A line to reveal what the winning move was
+    public RectTransform winnerLine;
+
     bool playerTurn = true;
     bool active = true;
 
-    void btnFunc(GameObject box) {
+    float start = 0f;
+    float dur = 1f;
+    bool animating = false;
+
+    void ButtonPress(GameObject box) {
         // If the game is done (inactive), don't do anything (this only happens when somebody won)
         if (!active)
             return;
@@ -31,7 +38,7 @@ public class PositionGrid : MonoBehaviour {
 
         playerTurn = !playerTurn;
 
-        int winner = checkForWinner();
+        int winner = CheckForWinner();
 
         Text turns = turnText.GetComponent<Text>();
         if (winner == -1) {
@@ -42,11 +49,14 @@ public class PositionGrid : MonoBehaviour {
                 turns.text = "It's a draw!";
             else
                 turns.text = "Player " + (winner == 3 ? "X" : "O") + " won!";
-            StartCoroutine(startReset(3));
+            StartCoroutine(StartReset(3));
         }
     }
 
-    void updateGrid() {
+    void RefreshGrid() {
+        // Winning line
+        winnerLine.sizeDelta = new Vector2(0, 32);
+
         // Turn Text
         turnText.GetComponent<RectTransform>().sizeDelta = new Vector2(Screen.width / 2 - Screen.height / 2, Screen.height);
 
@@ -79,14 +89,14 @@ public class PositionGrid : MonoBehaviour {
                 tran.anchoredPosition = new Vector2(posX + (Screen.height / 3 * x), -(Screen.height / 3 * y));
                 tran.sizeDelta = btnSize;
 
-                box.GetComponent<Button>().onClick.AddListener(delegate { btnFunc(box); });
+                box.GetComponent<Button>().onClick.AddListener(delegate { ButtonPress(box); });
                 // box.GetComponent<Button>().GetComponentInChildren<Text>().text = i.ToString();
             }
         }
     }
 
     // Returns -2 (draw),  -1 (no winner), 0 (O won), or 3 (X won)
-    int checkForWinner() {
+    int CheckForWinner() {
         // Grid layout:
         // 0  3  6
         // 1  4  7
@@ -109,8 +119,16 @@ public class PositionGrid : MonoBehaviour {
             }
 
             // The sum should be 0 or 3 if it's a winner
-            if (sum == 0 || sum == 3)
+            if (sum == 0 || sum == 3) {
+                // Animating the line
+                winnerLine.anchoredPosition = new Vector2(Screen.width / 2, -(Screen.height / 3 * i + (Screen.height / 6)));
+                winnerLine.localRotation = Quaternion.Euler(0f, 0f, 0f);
+
+                start = Time.time;
+                animating = true;
+
                 return sum;
+            }
         }
 
         // Check vertical positions
@@ -130,8 +148,16 @@ public class PositionGrid : MonoBehaviour {
             }
 
             // The sum should be 0 or 3 if it's a winner
-            if (sum == 0 || sum == 3)
+            if (sum == 0 || sum == 3) {
+                // Animating the line
+                winnerLine.anchoredPosition = new Vector2((Screen.width / 2 - Screen.height / 2) + Screen.height / 3 * i + (Screen.height / 6), -(Screen.height / 2));
+                winnerLine.localRotation = Quaternion.Euler(0f, 0f, 90f);
+
+                start = Time.time;
+                animating = true;
+
                 return sum;
+            }
         }
 
         // Check diagonal positions------------------------------------
@@ -149,8 +175,16 @@ public class PositionGrid : MonoBehaviour {
                 sumTL += state;
             }
         }
-        if (sumTL == 0 || sumTL == 3)
+        if (sumTL == 0 || sumTL == 3) {
+            // Animating the line
+            winnerLine.anchoredPosition = new Vector2(Screen.width / 2, -(Screen.height / 2));
+            winnerLine.localRotation = Quaternion.Euler(0f, 0f, -45f);
+
+            start = Time.time;
+            animating = true;
+
             return sumTL;
+        }
 
         // Bottom left to top right
         int sumBL = 0;
@@ -166,46 +200,69 @@ public class PositionGrid : MonoBehaviour {
                 sumBL += state;
             }
         }
-        if (sumBL == 0 || sumBL == 3)
+        if (sumBL == 0 || sumBL == 3) {
+            // Animating the line
+            winnerLine.anchoredPosition = new Vector2(Screen.width / 2, -(Screen.height / 2));
+            winnerLine.localRotation = Quaternion.Euler(0f, 0f, 45f);
+
+            start = Time.time;
+            animating = true;
+
             return sumBL;
+        }
 
         // Now double check to make sure there is an empty space. If all are full and we got this far, then there's a draw
-        int filled = 0;
+        bool filled = true;
         foreach (GameObject box in boxes) {
-            if (box.GetComponent<PositionState>().state != -1) {
-                filled++;
-            } else { // If one cell isn't filled, then we know that it's not a draw
-                break;
+            if (box.GetComponent<PositionState>().state == -1) {
+                filled = false;
             }
         }
-        if (filled == 9)
+        if (filled)
             return -2;
 
         return -1;
     }
 
-    void reset() {
+    void ResetGame() {
         foreach (GameObject box in boxes) {
             box.GetComponent<PositionState>().state = -1;
             box.GetComponent<Button>().GetComponentInChildren<Text>().text = "";
         }
         turnText.GetComponent<Text>().text = "It's X's turn!";
+        winnerLine.sizeDelta = new Vector2(0, 32);
         playerTurn = true;
         active = true;
+        animating = false;
     }
 
-    IEnumerator startReset(int time) {
+    IEnumerator StartReset(int time) {
         yield return new WaitForSeconds(time);
-        reset();
+        ResetGame();
     }
 
     void Start() {
-        updateGrid();
+        RefreshGrid();
     }
 
     void Update() {
         if (Input.GetKey(KeyCode.Escape)) {
             Application.Quit(); 
+        }
+
+        if (animating) {
+            float now = Time.time;
+            float delta = now - start;
+            float prog = delta / dur;
+
+            Vector2 size = winnerLine.sizeDelta;
+            if (prog < 1f) {
+                size.x = Mathf.Lerp(0, Screen.height, prog);
+            } else {
+                size.x = Screen.height;
+                animating = false;
+            }
+            winnerLine.sizeDelta = size;
         }
     }
 }
